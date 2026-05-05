@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+
+# Local backend config (copy dliv_outputs.example.json → dliv_outputs.json)
+dliv_outputs.json
+
+# Xcode / SwiftPM
+**/xcuserdata/
+*.xcuserstate
+DerivedData/
+.swiftpm/
