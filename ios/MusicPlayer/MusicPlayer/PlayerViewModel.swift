@@ -153,25 +153,24 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
         let trackURL = track.url
-        Task.detached(priority: .utility) { [weak self] in
-            let art = Self.albumArt(for: trackURL)
-            await MainActor.run {
-                guard let self, self.currentTrack?.url == trackURL else { return }
-                var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                updated[MPMediaItemPropertyArtwork] = art
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
-            }
+        Task(priority: .utility) { [trackURL] in
+            let art = await Self.albumArt(for: trackURL)
+            guard self.currentTrack?.url == trackURL else { return }
+            var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            updated[MPMediaItemPropertyArtwork] = art
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
         }
     }
 
-    private nonisolated static func albumArt(for url: URL) -> MPMediaItemArtwork? {
-        let asset = AVAsset(url: url)
-        for item in asset.commonMetadata {
-            if item.commonKey == .commonKeyArtwork,
-               let data  = item.dataValue,
-               let image = UIImage(data: data) {
-                return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-            }
+    private nonisolated static func albumArt(for url: URL) async -> MPMediaItemArtwork? {
+        let asset = AVURLAsset(url: url)
+        guard let metadata = try? await asset.load(.commonMetadata) else { return nil }
+
+        for item in metadata {
+            guard item.commonKey == .commonKeyArtwork else { continue }
+            guard let data = try? await item.load(.dataValue),
+                  let image = UIImage(data: data) else { continue }
+            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
         }
         return nil
     }

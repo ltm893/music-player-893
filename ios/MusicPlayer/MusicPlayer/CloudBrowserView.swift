@@ -121,65 +121,78 @@ struct CloudBrowserView: View {
     @ViewBuilder
     private func rootFolderBody(_ folder: CloudFolder) -> some View {
         if expandedKeys.contains(folder.key) {
-            if loadingKeys.contains(folder.key) {
-                HStack { Spacer(); ProgressView("Loading…"); Spacer() }
-            } else if let content = contents[folder.key] {
-                ForEach(content.subFolders) { sub in
-                    subFolderToggleRow(sub)
-                    subFolderExpandedContent(sub)
-                }
-                let mp3s = content.files.filter(\.isMp3)
-                ForEach(mp3s) { file in
-                    trackRow(file)
-                }
-                if content.subFolders.isEmpty && mp3s.isEmpty {
-                    Text("Empty folder").foregroundColor(.secondary).font(.caption)
-                }
-            }
+            folderExpandedContent(folder, indent: 16, loadingText: "Loading…")
         }
     }
 
-    private func subFolderToggleRow(_ folder: CloudFolder) -> some View {
-        HStack(spacing: 6) {
+    private func folderToggleRow(_ folder: CloudFolder, indent: CGFloat) -> some View {
+        let depth = max(0, Int((indent - 16) / 16))
+        let folderIcon = depth == 0 ? "opticaldisc" : "folder"
+        let tone = max(0.45, 1.0 - (Double(depth) * 0.12))
+        return HStack(spacing: 6) {
             Image(systemName: expandedKeys.contains(folder.key) ? "chevron.down" : "chevron.right")
                 .font(.caption2)
-                .foregroundColor(Color.navyBlue)
-            Image(systemName: "opticaldisc")
-                .foregroundColor(Color.navyBlue)
+                .foregroundColor(Color.navyBlue.opacity(tone))
+            Image(systemName: folderIcon)
+                .foregroundColor(Color.navyBlue.opacity(tone))
             Text(folder.name)
                 .font(.subheadline)
-                .foregroundColor(Color.navyBlue)
+                .foregroundColor(Color.navyBlue.opacity(tone))
             Spacer()
         }
-        .padding(.leading, 16)
+        .padding(.leading, indent)
         .contentShape(Rectangle())
         .onTapGesture { toggleFolder(folder) }
     }
 
-    @ViewBuilder
-    private func subFolderExpandedContent(_ folder: CloudFolder) -> some View {
-        if expandedKeys.contains(folder.key) {
-            if loadingKeys.contains(folder.key) {
-                HStack { Spacer(); ProgressView(); Spacer() }
-            } else if let content = contents[folder.key] {
+    private func folderExpandedContent(_ folder: CloudFolder, indent: CGFloat, loadingText: String? = nil) -> AnyView {
+        let resolvedLoadingText = loadingText ?? "Loading…"
+        guard expandedKeys.contains(folder.key) else {
+            return AnyView(EmptyView())
+        }
+
+        if loadingKeys.contains(folder.key) {
+            return AnyView(
+                HStack {
+                    Spacer()
+                    ProgressView(resolvedLoadingText)
+                    Spacer()
+                }
+            )
+        }
+
+        guard let content = contents[folder.key] else {
+            return AnyView(EmptyView())
+        }
+
+        return AnyView(
+            Group {
+                ForEach(content.subFolders) { sub in
+                    folderToggleRow(sub, indent: indent)
+                    folderExpandedContent(sub, indent: indent + 16)
+                }
                 let mp3s = content.files.filter(\.isMp3)
                 ForEach(mp3s) { file in
-                    trackRow(file, indent: 32)
+                    trackRow(file, indent: indent)
                 }
-                if mp3s.isEmpty {
-                    Text("No tracks found.").foregroundColor(.secondary).font(.caption)
-                        .padding(.leading, 32)
+                if content.subFolders.isEmpty && mp3s.isEmpty {
+                    Text("Empty folder")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                        .padding(.leading, indent)
                 }
             }
-        }
+        )
     }
 
     private func trackRow(_ file: CloudFile, indent: CGFloat = 16) -> some View {
-        HStack {
-            Image(systemName: "music.note").foregroundColor(Color.navyBlue)
+        let depth = max(0, Int((indent - 16) / 16))
+        let tone = max(0.5, 1.0 - (Double(depth) * 0.12))
+        return HStack {
+            Image(systemName: "music.note").foregroundColor(Color.navyBlue.opacity(tone))
             Text(file.displayTitle)
                 .font(.body)
-                .foregroundColor(Color.navyBlue)
+                .foregroundColor(Color.navyBlue.opacity(tone))
                 .lineLimit(1)
             Spacer()
         }

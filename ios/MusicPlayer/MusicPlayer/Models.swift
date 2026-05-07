@@ -34,10 +34,27 @@ struct CloudFile: Identifiable {
     var isMp3: Bool { name.lowercased().hasSuffix(".mp3") }
     var displayTitle: String { name.replacingOccurrences(of: ".mp3", with: "") }
 
-    var cloudSubfolder: String? {
-        let parts = key.split(separator: "/")
-        guard parts.count >= 3 else { return nil }
-        return String(parts[parts.count - 2])
+    private var keyParts: [String] {
+        key.split(separator: "/").map(String.init)
+    }
+
+    /// Full path under `Music/`, including filename.
+    /// Example: Music/A/B/song.mp3 -> A/B/song.mp3
+    var musicRelativePath: String? {
+        var parts = keyParts
+        if parts.first == "Music" { parts.removeFirst() }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: "/")
+    }
+
+    /// Folder path under `Music/`, excluding filename.
+    /// Example: Music/A/B/song.mp3 -> A/B
+    var musicRelativeFolder: String? {
+        guard let relativePath = musicRelativePath else { return nil }
+        let fileName = name
+        guard relativePath.count > fileName.count else { return nil }
+        let folder = String(relativePath.dropLast(fileName.count + 1))
+        return folder.isEmpty ? nil : folder
     }
 }
 

@@ -1,5 +1,17 @@
 import SwiftUI
 
+private struct LocalFolderNode: Identifiable {
+    let id: String
+    let name: String
+    let path: String
+    var directTracks: [Track]
+    var children: [LocalFolderNode]
+
+    var allTracks: [Track] {
+        directTracks + children.flatMap(\.allTracks)
+    }
+}
+
 struct ContentView: View {
 
     @StateObject private var vm      = PlayerViewModel()
@@ -7,6 +19,10 @@ struct ContentView: View {
     @State private var showCloud     = false
     @State private var showLogin     = false
     @State private var expandedFolders: Set<String> = []
+
+    private var folderTree: [LocalFolderNode] {
+        buildFolderTree(from: vm.tracks)
+    }
 
     var body: some View {
         NavigationStack {
@@ -21,71 +37,10 @@ struct ContentView: View {
                     )
                 } else {
                     List {
-                        ForEach(vm.groupedTracks, id: \.key) { group in
-                            let isExpanded = expandedFolders.contains(group.key)
-
-                            Section {
-                                if isExpanded {
-                                    ForEach(group.tracks) { track in
-                                        TrackRow(
-                                            track: track,
-                                            isPlaying: vm.isPlaying && vm.currentTrack == track
-                                        ) {
-                                            if vm.currentTrack == track {
-                                                vm.isPlaying ? vm.pause() : vm.resume()
-                                            } else {
-                                                vm.play(track)
-                                            }
-                                        }
-                                        .listRowBackground(Color.appBackground)
-                                    }
-                                    .onDelete { offsets in
-                                        offsets.map { group.tracks[$0] }.forEach { vm.deleteTrack($0) }
-                                    }
-                                }
-                            } header: {
-                                HStack {
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            if expandedFolders.contains(group.key) {
-                                                expandedFolders.remove(group.key)
-                                            } else {
-                                                expandedFolders.insert(group.key)
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                                                .font(.caption2)
-                                                .foregroundColor(Color.navyBlue)
-                                            Text(group.key.isEmpty ? "Library" : group.key)
-                                                .font(.headline)
-                                                .foregroundColor(Color.navyBlue)
-                                                .textCase(nil)
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    Spacer()
-
-                                    let isGroupActive   = vm.isPlaying && group.tracks.contains(where: { $0 == vm.currentTrack })
-                                    let isPlayActive    = isGroupActive && !vm.isShuffled
-                                    let isShuffleActive = isGroupActive && vm.isShuffled
-
-                                    Button { vm.playAll(group.tracks) } label: {
-                                        Label("Play", systemImage: "play.fill")
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    .buttonStyle(DirectoryButtonStyle(isActive: isPlayActive))
-                                    .controlSize(.mini)
-
-                                    Button { vm.playShuffle(group.tracks) } label: {
-                                        Label("Shuffle", systemImage: "shuffle")
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    .buttonStyle(DirectoryButtonStyle(isActive: isShuffleActive))
-                                    .controlSize(.mini)
-                                }
+                        ForEach(folderTree) { node in
+                            folderNodeRow(node, indent: 0)
+                            if expandedFolders.contains(node.path) {
+                                folderNodeChildren(node, indent: 1)
                             }
                         }
                     }
@@ -141,6 +96,128 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func folderNodeChildren(_ node: LocalFolderNode, indent: Int) -> AnyView {
+        AnyView(
+            Group {
+                ForEach(node.children) { child in
+                    folderNodeRow(child, indent: indent)
+                    if expandedFolders.contains(child.path) {
+                        folderNodeChildren(child, indent: indent + 1)
+                    }
+                }
+                if !node.directTracks.isEmpty {
+                    ForEach(node.directTracks) { track in
+                        TrackRow(
+                            track: track,
+                            isPlaying: vm.isPlaying && vm.currentTrack == track
+                        ) {
+                            if vm.currentTrack == track {
+                                vm.isPlaying ? vm.pause() : vm.resume()
+                            } else {
+                                vm.play(track)
+                            }
+                        }
+                        .padding(.leading, CGFloat((indent + 1) * 16))
+                        .listRowBackground(Color.appBackground)
+                    }
+                }
+            }
+        )
+    }
+
+    private func folderNodeRow(_ node: LocalFolderNode, indent: Int) -> some View {
+        let isExpanded = expandedFolders.contains(node.path)
+        let isGroupActive = vm.isPlaying && node.allTracks.contains(where: { $0 == vm.currentTrack })
+        let isPlayActive = isGroupActive && !vm.isShuffled
+        let isShuffleActive = isGroupActive && vm.isShuffled
+
+        return HStack {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isExpanded { expandedFolders.remove(node.path) }
+                    else { expandedFolders.insert(node.path) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(Color.navyBlue)
+                    Text(node.name)
+                        .font(.headline)
+                        .foregroundColor(Color.navyBlue)
+                        .textCase(nil)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, CGFloat(indent * 16))
+
+            Spacer()
+
+            Button { vm.playAll(node.allTracks) } label: {
+                Label("Play", systemImage: "play.fill")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(DirectoryButtonStyle(isActive: isPlayActive))
+            .controlSize(.mini)
+
+            Button { vm.playShuffle(node.allTracks) } label: {
+                Label("Shuffle", systemImage: "shuffle")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(DirectoryButtonStyle(isActive: isShuffleActive))
+            .controlSize(.mini)
+        }
+        .listRowBackground(Color.appBackground)
+    }
+
+    private func buildFolderTree(from tracks: [Track]) -> [LocalFolderNode] {
+        final class Node {
+            let name: String
+            let path: String
+            var directTracks: [Track] = []
+            var children: [String: Node] = [:]
+
+            init(name: String, path: String) {
+                self.name = name
+                self.path = path
+            }
+        }
+
+        let root = Node(name: "root", path: "")
+
+        for track in tracks {
+            let segments = (track.folder ?? "")
+                .split(separator: "/")
+                .map(String.init)
+
+            var current = root
+            var currentPath = ""
+            for segment in segments {
+                currentPath = currentPath.isEmpty ? segment : "\(currentPath)/\(segment)"
+                if current.children[segment] == nil {
+                    current.children[segment] = Node(name: segment, path: currentPath)
+                }
+                current = current.children[segment]!
+            }
+            current.directTracks.append(track)
+        }
+
+        func flatten(_ node: Node) -> [LocalFolderNode] {
+            node.children.keys.sorted().compactMap { key in
+                guard let child = node.children[key] else { return nil }
+                return LocalFolderNode(
+                    id: child.path,
+                    name: child.name,
+                    path: child.path,
+                    directTracks: child.directTracks.sorted { $0.title < $1.title },
+                    children: flatten(child)
+                )
+            }
+        }
+
+        return flatten(root)
     }
 }
 

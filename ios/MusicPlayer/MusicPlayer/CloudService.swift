@@ -266,8 +266,8 @@ class CloudService: ObservableObject {
         do {
             let cloudFiles = try await fetchAllMp3s(under: "Music/")
 
-            let localNames = Set(localTracks.map { $0.url.lastPathComponent.lowercased() })
-            let cloudNames = Set(cloudFiles.map { $0.name.lowercased() })
+            let localPaths = Set(localTracks.map { $0.relativePath.lowercased() })
+            let cloudPaths = Set(cloudFiles.compactMap { $0.musicRelativePath?.lowercased() })
 
             var cloudOnly: [SyncItem] = []
             var synced:    [SyncItem] = []
@@ -275,15 +275,15 @@ class CloudService: ObservableObject {
             for file in cloudFiles {
                 let item = SyncItem(
                     file:      file,
-                    subfolder: file.cloudSubfolder ?? "",
-                    isLocal:   localNames.contains(file.name.lowercased())
+                    subfolder: file.musicRelativeFolder ?? "",
+                    isLocal:   file.musicRelativePath.map { localPaths.contains($0.lowercased()) } ?? false
                 )
                 if item.isLocal { synced.append(item) }
                 else            { cloudOnly.append(item) }
             }
 
             let localOnly = localTracks.filter {
-                !cloudNames.contains($0.url.lastPathComponent.lowercased())
+                !cloudPaths.contains($0.relativePath.lowercased())
             }
 
             let sortedCloudOnly = cloudOnly.sorted {
