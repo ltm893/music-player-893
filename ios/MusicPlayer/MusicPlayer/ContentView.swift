@@ -133,6 +133,11 @@ struct ContentView: View {
         let isPlayActive = isGroupActive && !vm.isShuffled
         let isShuffleActive = isGroupActive && vm.isShuffled
 
+        // Show Play/Shuffle only when the folder directly contains mp3s,
+        // or is a leaf (no subdirectories). Pure container folders
+        // (subdirectories only, no direct mp3s) are expand-only.
+        let showPlayButtons = !node.directTracks.isEmpty || node.children.isEmpty
+
         return HStack {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -155,19 +160,21 @@ struct ContentView: View {
 
             Spacer()
 
-            Button { vm.playAll(node.allTracks) } label: {
-                Label("Play", systemImage: "play.fill")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(DirectoryButtonStyle(isActive: isPlayActive))
-            .controlSize(.mini)
+            if showPlayButtons {
+                Button { vm.playAll(node.allTracks) } label: {
+                    Label("Play", systemImage: "play.fill")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(DirectoryButtonStyle(isActive: isPlayActive))
+                .controlSize(.mini)
 
-            Button { vm.playShuffle(node.allTracks) } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .font(.caption.weight(.semibold))
+                Button { vm.playShuffle(node.allTracks) } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(DirectoryButtonStyle(isActive: isShuffleActive))
+                .controlSize(.mini)
             }
-            .buttonStyle(DirectoryButtonStyle(isActive: isShuffleActive))
-            .controlSize(.mini)
         }
         .listRowBackground(Color.appBackground)
     }
