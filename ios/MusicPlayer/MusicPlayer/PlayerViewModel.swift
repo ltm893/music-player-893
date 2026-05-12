@@ -43,6 +43,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         configureAudioSession()
         setupRemoteControls()
         loadTracksFromDisk()
+        CarPlayPlayableContentAdapter.shared.register(with: self)
     }
 
     // MARK: - Audio Session
@@ -228,6 +229,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         tracks = found
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { Track(url: $0) }
+        CarPlayPlayableContentAdapter.shared.reloadFromPlayer()
     }
 
     func importTrack(from sourceURL: URL) {
