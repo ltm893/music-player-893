@@ -1,17 +1,5 @@
 import SwiftUI
 
-private struct LocalFolderNode: Identifiable {
-    let id: String
-    let name: String
-    let path: String
-    var directTracks: [Track]
-    var children: [LocalFolderNode]
-
-    var allTracks: [Track] {
-        directTracks + children.flatMap(\.allTracks)
-    }
-}
-
 struct ContentView: View {
 
     @StateObject private var vm      = PlayerViewModel()
@@ -21,7 +9,7 @@ struct ContentView: View {
     @State private var expandedFolders: Set<String> = []
 
     private var folderTree: [LocalFolderNode] {
-        buildFolderTree(from: vm.tracks)
+        LocalLibraryTree.build(from: vm.tracks).folders
     }
 
     var body: some View {
@@ -136,7 +124,7 @@ struct ContentView: View {
         // Show Play/Shuffle only when the folder directly contains mp3s,
         // or is a leaf (no subdirectories). Pure container folders
         // (subdirectories only, no direct mp3s) are expand-only.
-        let showPlayButtons = !node.directTracks.isEmpty || node.children.isEmpty
+        let showPlayButtons = node.showsPlayButtons
 
         return HStack {
             Button {
@@ -177,54 +165,6 @@ struct ContentView: View {
             }
         }
         .listRowBackground(Color.appBackground)
-    }
-
-    private func buildFolderTree(from tracks: [Track]) -> [LocalFolderNode] {
-        final class Node {
-            let name: String
-            let path: String
-            var directTracks: [Track] = []
-            var children: [String: Node] = [:]
-
-            init(name: String, path: String) {
-                self.name = name
-                self.path = path
-            }
-        }
-
-        let root = Node(name: "root", path: "")
-
-        for track in tracks {
-            let segments = (track.folder ?? "")
-                .split(separator: "/")
-                .map(String.init)
-
-            var current = root
-            var currentPath = ""
-            for segment in segments {
-                currentPath = currentPath.isEmpty ? segment : "\(currentPath)/\(segment)"
-                if current.children[segment] == nil {
-                    current.children[segment] = Node(name: segment, path: currentPath)
-                }
-                current = current.children[segment]!
-            }
-            current.directTracks.append(track)
-        }
-
-        func flatten(_ node: Node) -> [LocalFolderNode] {
-            node.children.keys.sorted().compactMap { key in
-                guard let child = node.children[key] else { return nil }
-                return LocalFolderNode(
-                    id: child.path,
-                    name: child.name,
-                    path: child.path,
-                    directTracks: child.directTracks.sorted { $0.title < $1.title },
-                    children: flatten(child)
-                )
-            }
-        }
-
-        return flatten(root)
     }
 }
 

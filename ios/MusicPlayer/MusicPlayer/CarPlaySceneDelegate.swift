@@ -12,7 +12,7 @@ import Foundation
 
 final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
 
-    private static weak var connectedInterface: CPInterfaceController?
+    private(set) static weak var connectedInterface: CPInterfaceController?
 
     private static func runOnMainActorSync<T>(_ body: @MainActor () -> T) -> T {
         if Thread.isMainThread {
@@ -47,30 +47,11 @@ final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
 
     @MainActor
     private static func installRootList(into interfaceController: CPInterfaceController, animated: Bool) {
+        CarPlayNowPlayingItemRegistry.clear()
         let player = CarPlayPlayableContentAdapter.shared.player
         let tracks = player?.tracks ?? []
-
-        let items: [CPListItem] = tracks.map { track in
-            let item = CPListItem(text: track.title, detailText: track.folder)
-            item.handler = { _, completion in
-                Task { @MainActor in
-                    CarPlayPlayableContentAdapter.shared.player?.play(track)
-                    completion()
-                }
-            }
-            return item
-        }
-
-        let sections: [CPListSection]
-        if items.isEmpty {
-            let hint = CPListItem(text: "No tracks", detailText: "Add music on your iPhone")
-            hint.handler = { _, completion in completion() }
-            sections = [CPListSection(items: [hint])]
-        } else {
-            sections = [CPListSection(items: items)]
-        }
-
-        let list = CPListTemplate(title: "Music", sections: sections)
+        let library = LocalLibraryTree.build(from: tracks)
+        let list = CarPlayListTemplates.rootListTemplate(library: library)
         interfaceController.setRootTemplate(list, animated: animated) { _, _ in }
     }
 

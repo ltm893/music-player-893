@@ -139,6 +139,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private func updateNowPlayingInfo() {
         guard let track = currentTrack else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            CarPlayNowPlayingItemRegistry.sync()
             return
         }
 
@@ -152,6 +153,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        CarPlayNowPlayingItemRegistry.sync()
 
         let trackURL = track.url
         Task(priority: .utility) { [trackURL] in
@@ -260,7 +262,15 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: - Playback Controls
 
+    /// Single-track playback; clears any active folder queue.
     func play(_ track: Track) {
+        queue = []
+        queueIndex = 0
+        isShuffled = false
+        startPlayback(track)
+    }
+
+    private func startPlayback(_ track: Track) {
         do {
             player = try AVAudioPlayer(contentsOf: track.url)
             player?.delegate = self
@@ -302,6 +312,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         queue = []; queueIndex = 0
         stopProgressTimer()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        CarPlayNowPlayingItemRegistry.sync()
     }
 
     // MARK: - Skip Controls
@@ -309,7 +320,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func skipNext() {
         if !queue.isEmpty {
             let next = queueIndex + 1
-            if next < queue.count { queueIndex = next; play(queue[queueIndex]) }
+            if next < queue.count { queueIndex = next; startPlayback(queue[queueIndex]) }
         } else if let current = currentTrack,
                   let idx = tracks.firstIndex(of: current),
                   idx + 1 < tracks.count {
@@ -324,7 +335,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         if !queue.isEmpty {
             let prev = queueIndex - 1
-            if prev >= 0 { queueIndex = prev; play(queue[queueIndex]) }
+            if prev >= 0 { queueIndex = prev; startPlayback(queue[queueIndex]) }
             else { seek(to: 0) }
         } else if let current = currentTrack,
                   let idx = tracks.firstIndex(of: current) {
@@ -340,7 +351,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         isShuffled = false
         queue = tracksToQueue
         queueIndex = 0
-        play(queue[0])
+        startPlayback(queue[0])
     }
 
     func playShuffle(_ tracksToQueue: [Track]) {
@@ -348,13 +359,13 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         isShuffled = true
         queue = tracksToQueue.shuffled()
         queueIndex = 0
-        play(queue[0])
+        startPlayback(queue[0])
     }
 
     private func playNext() {
         queueIndex += 1
         if queueIndex < queue.count {
-            play(queue[queueIndex])
+            startPlayback(queue[queueIndex])
         } else {
             queue = []; queueIndex = 0
             currentTrack = nil; isPlaying = false
