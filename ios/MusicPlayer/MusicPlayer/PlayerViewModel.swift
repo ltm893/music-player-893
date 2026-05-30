@@ -262,11 +262,27 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: - Playback Controls
 
-    /// Single-track playback; clears any active folder queue.
+    /// Play a single track, then continue with the remaining tracks in the
+    /// same directory (sorted by filename, starting from the tapped track).
     func play(_ track: Track) {
-        queue = []
-        queueIndex = 0
-        isShuffled = false
+        // Gather all tracks in the same folder (nil folder = Documents root)
+        let folderTracks = tracks
+            .filter { $0.folder == track.folder }
+            .sorted { $0.title < $1.title }
+
+        if folderTracks.count > 1,
+           let startIndex = folderTracks.firstIndex(of: track) {
+            // Queue = from the tapped track to the end of the folder
+            isShuffled = false
+            queue      = Array(folderTracks[startIndex...])
+            queueIndex = 0
+        } else {
+            // Only one track in folder (or not found) — plain single play
+            queue      = []
+            queueIndex = 0
+            isShuffled = false
+        }
+
         startPlayback(track)
     }
 
@@ -313,6 +329,8 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         stopProgressTimer()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         CarPlayNowPlayingItemRegistry.sync()
+        // Reset CarPlay navigation stack so it isn't stranded inside a folder
+        CarPlaySceneDelegate.popToRoot(animated: true)
     }
 
     // MARK: - Skip Controls

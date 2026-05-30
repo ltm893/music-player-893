@@ -52,12 +52,27 @@ final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
         let tracks = player?.tracks ?? []
         let library = LocalLibraryTree.build(from: tracks)
         let list = CarPlayListTemplates.rootListTemplate(library: library)
-        interfaceController.setRootTemplate(list, animated: animated) { _, _ in }
+        // sync() in the completion block so indicators are applied after the
+        // root template is live and all CPListItems are registered.
+        interfaceController.setRootTemplate(list, animated: animated) { _, _ in
+            CarPlayNowPlayingItemRegistry.sync()
+        }
     }
 
     @MainActor
     static func rebuildRootList(animated: Bool) {
         guard let ic = connectedInterface else { return }
         installRootList(into: ic, animated: animated)
+    }
+
+    /// Pop any pushed folder templates back to the root list.
+    /// Called after stop() so CarPlay isn't stranded inside a folder
+    /// with a stale now-playing state.
+    @MainActor
+    static func popToRoot(animated: Bool) {
+        guard let ic = connectedInterface else { return }
+        ic.popToRootTemplate(animated: animated) { _, _ in
+            CarPlayNowPlayingItemRegistry.sync()
+        }
     }
 }

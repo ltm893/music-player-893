@@ -59,7 +59,11 @@ enum CarPlayListTemplates {
         }
 
         let template = CPListTemplate(title: title, sections: sections)
-        CarPlayNowPlayingItemRegistry.sync()
+        // NOTE: Do NOT call sync() here — track items have been registered above
+        // but the template isn't visible yet. sync() is called after push completes
+        // (see folderItem handler) and after setRootTemplate completes (see
+        // CarPlaySceneDelegate.installRootList). This ensures indicators are set
+        // on the live, visible template rather than during construction.
         return template
     }
 
@@ -95,7 +99,11 @@ enum CarPlayListTemplates {
                     return
                 }
                 let template = folderListTemplate(node: node)
-                interface.pushTemplate(template, animated: true) { _, _ in }
+                // sync() after push completes so indicators reflect playing state
+                // on the now-visible folder template.
+                interface.pushTemplate(template, animated: true) { _, _ in
+                    CarPlayNowPlayingItemRegistry.sync()
+                }
                 completion()
             }
         }
@@ -104,7 +112,7 @@ enum CarPlayListTemplates {
 
     // MARK: - CarPlay list limits
 
-    /// CarPlay caps total rows per `CPListTemplate` (often ~10); paginate with “More Songs”.
+    /// CarPlay caps total rows per `CPListTemplate` (often ~10); paginate with "More Songs".
     private static func itemBudget(playControls: Int, folderItems: Int) -> Int {
         max(0, CPListTemplate.maximumItemCount - playControls - folderItems)
     }
@@ -131,7 +139,9 @@ enum CarPlayListTemplates {
                     return
                 }
                 let template = tracksPageListTemplate(tracks: remainingTracks)
-                interface.pushTemplate(template, animated: true) { _, _ in }
+                interface.pushTemplate(template, animated: true) { _, _ in
+                    CarPlayNowPlayingItemRegistry.sync()
+                }
                 completion()
             }
         }
@@ -140,9 +150,7 @@ enum CarPlayListTemplates {
 
     private static func tracksPageListTemplate(tracks: [Track]) -> CPListTemplate {
         let items = trackListItems(tracks, itemBudget: CPListTemplate.maximumItemCount)
-        let template = CPListTemplate(title: "Songs", sections: [CPListSection(items: items)])
-        CarPlayNowPlayingItemRegistry.sync()
-        return template
+        return CPListTemplate(title: "Songs", sections: [CPListSection(items: items)])
     }
 
     private static func trackItem(_ track: Track) -> CPListItem {
