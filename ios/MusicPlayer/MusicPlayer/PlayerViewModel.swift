@@ -265,19 +265,16 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Play a single track, then continue with the remaining tracks in the
     /// same directory (sorted by filename, starting from the tapped track).
     func play(_ track: Track) {
-        // Gather all tracks in the same folder (nil folder = Documents root)
         let folderTracks = tracks
             .filter { $0.folder == track.folder }
             .sorted { $0.title < $1.title }
 
         if folderTracks.count > 1,
            let startIndex = folderTracks.firstIndex(of: track) {
-            // Queue = from the tapped track to the end of the folder
             isShuffled = false
             queue      = Array(folderTracks[startIndex...])
             queueIndex = 0
         } else {
-            // Only one track in folder (or not found) — plain single play
             queue      = []
             queueIndex = 0
             isShuffled = false
@@ -317,46 +314,67 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         updateNowPlayingInfo()
     }
 
-    func stop() {
+    /// Shared teardown used by both stop() and the end-of-queue path in playNext().
+    /// Clears all playback state, resets CarPlay navigation, and clears the lock screen.
+    private func resetPlayback() {
         player?.stop()
-        player = nil
+        player       = nil
         currentTrack = nil
         isPlaying    = false
         isShuffled   = false
         currentTime  = 0
         duration     = 0
-        queue = []; queueIndex = 0
+        queue        = []
+        queueIndex   = 0
         stopProgressTimer()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         CarPlayNowPlayingItemRegistry.sync()
-        // Reset CarPlay navigation stack so it isn't stranded inside a folder
         CarPlaySceneDelegate.popToRoot(animated: true)
+    }
+
+    func stop() {
+        resetPlayback()
     }
 
     // MARK: - Skip Controls
 
+    /// Skip to the next track in the queue.
+    /// Both the queue-active and no-queue paths go through play() so folder-queue
+    /// logic, CarPlay state, and now-playing info are always handled consistently.
+    /// Skipping past the last track stops playback cleanly.
     func skipNext() {
+        guard let current = currentTrack else { return }
+
         if !queue.isEmpty {
             let next = queueIndex + 1
-            if next < queue.count { queueIndex = next; startPlayback(queue[queueIndex]) }
-        } else if let current = currentTrack,
-                  let idx = tracks.firstIndex(of: current),
-                  idx + 1 < tracks.count {
+            if next < queue.count {
+                play(queue[next])
+            } else {
+                stop()
+            }
+        } else if let idx = tracks.firstIndex(of: current), idx + 1 < tracks.count {
             play(tracks[idx + 1])
         }
     }
 
+    /// Skip to the previous track in the queue.
+    /// If more than 3 seconds in, restarts the current track instead.
+    /// Both paths go through play() for consistent queue and CarPlay handling.
     func skipBack() {
-        // If more than 3 seconds in, restart; otherwise go to previous
+        guard let current = currentTrack else { return }
+
         if let player, player.currentTime > 3 {
             seek(to: 0); return
         }
+
         if !queue.isEmpty {
             let prev = queueIndex - 1
-            if prev >= 0 { queueIndex = prev; startPlayback(queue[queueIndex]) }
-            else { seek(to: 0) }
-        } else if let current = currentTrack,
-                  let idx = tracks.firstIndex(of: current) {
+            if prev >= 0 {
+                play(queue[prev])
+            } else {
+                seek(to: 0)
+            }
+        } else if let idx = tracks.firstIndex(of: current) {
             if idx > 0 { play(tracks[idx - 1]) }
             else { seek(to: 0) }
         }
@@ -367,7 +385,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func playAll(_ tracksToQueue: [Track]) {
         guard !tracksToQueue.isEmpty else { return }
         isShuffled = false
-        queue = tracksToQueue
+        queue      = tracksToQueue
         queueIndex = 0
         startPlayback(queue[0])
     }
@@ -375,7 +393,7 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func playShuffle(_ tracksToQueue: [Track]) {
         guard !tracksToQueue.isEmpty else { return }
         isShuffled = true
-        queue = tracksToQueue.shuffled()
+        queue      = tracksToQueue.shuffled()
         queueIndex = 0
         startPlayback(queue[0])
     }
@@ -385,11 +403,8 @@ class PlayerViewModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if queueIndex < queue.count {
             startPlayback(queue[queueIndex])
         } else {
-            queue = []; queueIndex = 0
-            currentTrack = nil; isPlaying = false
-            currentTime  = 0; duration = 0
-            stopProgressTimer()
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            // Queue exhausted — tear down identically to stop()
+            resetPlayback()
         }
     }
 

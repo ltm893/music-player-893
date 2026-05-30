@@ -112,63 +112,70 @@ struct CloudBrowserView: View {
 
     private func rootFolderSection(_ folder: CloudFolder) -> some View {
         Section {
-            rootFolderBody(folder)
+            if expandedKeys.contains(folder.key) {
+                folderExpandedContent(folder, indent: 16)
+            }
         } header: {
-            folderHeaderRow(folder: folder)
+            // Root folders use indent=0 — folderRow renders without the folder
+            // icon and at full opacity, acting as a section header.
+            folderRow(folder, indent: 0)
         }
     }
 
-    @ViewBuilder
-    private func rootFolderBody(_ folder: CloudFolder) -> some View {
-        if expandedKeys.contains(folder.key) {
-            folderExpandedContent(folder, indent: 16, loadingText: "Loading…")
+    // MARK: - Unified folder row
+    // Replaces the old folderToggleRow (nested) + folderHeaderRow (root) pair.
+    // indent=0  → root section header style (full opacity, no folder icon)
+    // indent>0  → nested subfolder style (dimmed by depth, shows folder icon)
+
+    private func folderRow(_ folder: CloudFolder, indent: CGFloat) -> some View {
+        let depth    = max(0, Int((indent - 16) / 16))
+        let tone     = indent == 0 ? 1.0 : max(0.45, 1.0 - (Double(depth) * 0.12))
+        let icon     = indent == 0 ? "opticaldisc" : "folder"
+        let isExpanded = expandedKeys.contains(folder.key)
+
+        return Button {
+            toggleFolder(folder)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(Color.navyBlue.opacity(tone))
+                if indent > 0 {
+                    Image(systemName: icon)
+                        .foregroundColor(Color.navyBlue.opacity(tone))
+                }
+                Text(folder.name)
+                    .font(.subheadline)
+                    .foregroundColor(Color.navyBlue.opacity(tone))
+                    .textCase(nil)
+                Spacer()
+            }
+            .padding(.leading, indent)
         }
+        .buttonStyle(.plain)
     }
 
-    private func folderToggleRow(_ folder: CloudFolder, indent: CGFloat) -> some View {
-        let depth = max(0, Int((indent - 16) / 16))
-        let folderIcon = depth == 0 ? "opticaldisc" : "folder"
-        let tone = max(0.45, 1.0 - (Double(depth) * 0.12))
-        return HStack(spacing: 6) {
-            Image(systemName: expandedKeys.contains(folder.key) ? "chevron.down" : "chevron.right")
-                .font(.caption2)
-                .foregroundColor(Color.navyBlue.opacity(tone))
-            Image(systemName: folderIcon)
-                .foregroundColor(Color.navyBlue.opacity(tone))
-            Text(folder.name)
-                .font(.subheadline)
-                .foregroundColor(Color.navyBlue.opacity(tone))
-            Spacer()
-        }
-        .padding(.leading, indent)
-        .contentShape(Rectangle())
-        .onTapGesture { toggleFolder(folder) }
-    }
+    // MARK: - Expanded content
 
-    private func folderExpandedContent(_ folder: CloudFolder, indent: CGFloat, loadingText: String? = nil) -> AnyView {
-        let resolvedLoadingText = loadingText ?? "Loading…"
-        guard expandedKeys.contains(folder.key) else {
-            return AnyView(EmptyView())
-        }
+    private func folderExpandedContent(_ folder: CloudFolder, indent: CGFloat) -> AnyView {
+        guard expandedKeys.contains(folder.key) else { return AnyView(EmptyView()) }
 
         if loadingKeys.contains(folder.key) {
             return AnyView(
                 HStack {
                     Spacer()
-                    ProgressView(resolvedLoadingText)
+                    ProgressView("Loading…")
                     Spacer()
                 }
             )
         }
 
-        guard let content = contents[folder.key] else {
-            return AnyView(EmptyView())
-        }
+        guard let content = contents[folder.key] else { return AnyView(EmptyView()) }
 
         return AnyView(
             Group {
                 ForEach(content.subFolders) { sub in
-                    folderToggleRow(sub, indent: indent)
+                    folderRow(sub, indent: indent)
                     folderExpandedContent(sub, indent: indent + 16)
                 }
                 let mp3s = content.files.filter(\.isMp3)
@@ -187,7 +194,7 @@ struct CloudBrowserView: View {
 
     private func trackRow(_ file: CloudFile, indent: CGFloat = 16) -> some View {
         let depth = max(0, Int((indent - 16) / 16))
-        let tone = max(0.5, 1.0 - (Double(depth) * 0.12))
+        let tone  = max(0.5, 1.0 - (Double(depth) * 0.12))
         return HStack {
             Image(systemName: "music.note").foregroundColor(Color.navyBlue.opacity(tone))
             Text(file.displayTitle)
@@ -197,24 +204,6 @@ struct CloudBrowserView: View {
             Spacer()
         }
         .padding(.leading, indent)
-    }
-
-    private func folderHeaderRow(folder: CloudFolder) -> some View {
-        Button {
-            toggleFolder(folder)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: expandedKeys.contains(folder.key) ? "chevron.down" : "chevron.right")
-                    .font(.caption2)
-                    .foregroundColor(Color.navyBlue)
-                Text(folder.name)
-                    .font(.subheadline)
-                    .foregroundColor(Color.navyBlue)
-                    .textCase(nil)
-                Spacer()
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Data Actions

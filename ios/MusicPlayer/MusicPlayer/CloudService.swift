@@ -53,6 +53,11 @@ class CloudService: ObservableObject {
     private let documentsURL: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
 
+    /// Coalesces concurrent refresh calls — only one Cognito request in flight at a time.
+    /// Any caller that arrives while a refresh is already running awaits the same Task
+    /// instead of firing a second request (which Cognito may reject on rotation).
+    private var refreshTask: Task<String, Error>?
+
     // MARK: - Init
 
     init() {
@@ -102,6 +107,8 @@ class CloudService: ObservableObject {
     }
 
     func signOut() async {
+        refreshTask?.cancel()
+        refreshTask  = nil
         deleteToken(key: kIdToken)
         deleteToken(key: kAccessToken)
         deleteToken(key: kRefreshToken)
@@ -116,14 +123,33 @@ class CloudService: ObservableObject {
         if let token = loadToken(key: kIdToken), !isTokenExpired(token) {
             return token
         }
-        if let refreshToken = loadToken(key: kRefreshToken) {
-            return try await refresh(refreshToken: refreshToken)
+        guard loadToken(key: kRefreshToken) != nil else {
+            await signOut()
+            throw CloudAuthError.noToken
         }
-        await signOut()
-        throw CloudAuthError.noToken
+        return try await coalesceRefresh()
     }
 
-    private func refresh(refreshToken: String) async throws -> String {
+    /// Returns the in-flight refresh Task if one exists, otherwise creates a new one.
+    /// Clears itself on completion so the next expiry triggers a fresh request.
+    private func coalesceRefresh() async throws -> String {
+        if let existing = refreshTask {
+            return try await existing.value
+        }
+        let task = Task<String, Error> { [weak self] in
+            guard let self else { throw CloudAuthError.noToken }
+            return try await self.performRefresh()
+        }
+        refreshTask = task
+        defer { refreshTask = nil }
+        return try await task.value
+    }
+
+    private func performRefresh() async throws -> String {
+        guard let refreshToken = loadToken(key: kRefreshToken) else {
+            await signOut()
+            throw CloudAuthError.noToken
+        }
         let body: [String: Any] = [
             "AuthFlow": "REFRESH_TOKEN_AUTH",
             "AuthParameters": ["REFRESH_TOKEN": refreshToken],
@@ -137,8 +163,8 @@ class CloudService: ObservableObject {
             let accessToken = authResult["AccessToken"]      as? String
         else { await signOut(); throw CloudAuthError.noToken }
 
-        saveToken(key: kIdToken,     value: idToken)
-        saveToken(key: kAccessToken, value: accessToken)
+        saveToken(key: kIdToken,      value: idToken)
+        saveToken(key: kAccessToken,  value: accessToken)
         return idToken
     }
 

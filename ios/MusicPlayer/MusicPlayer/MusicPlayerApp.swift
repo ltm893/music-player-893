@@ -6,7 +6,50 @@
 //
 import SwiftUI
 
-// MARK: - Navy Bordered Button Style
+// MARK: - App Appearance
+
+enum AppAppearance {
+    static func configure() {
+        let navy = UIColor(Color.navyBlue)
+        let bg   = UIColor(Color.appBackground)
+
+        // List / TableView backgrounds
+        UITableView.appearance().backgroundColor     = bg
+        UITableViewCell.appearance().backgroundColor = bg
+        UITableView.appearance().separatorColor      = UIColor(Color.navyBlue.opacity(0.2))
+
+        // All text navy
+        UILabel.appearance().textColor                                = navy
+        UINavigationBar.appearance().titleTextAttributes             = [.foregroundColor: navy]
+        UINavigationBar.appearance().largeTitleTextAttributes        = [.foregroundColor: navy]
+        UITextField.appearance().textColor                           = navy
+
+        // Nav bar background
+        let navBarAppearance = UINavigationBarAppearance()
+        navBarAppearance.configureWithOpaqueBackground()
+        navBarAppearance.backgroundColor           = bg
+        navBarAppearance.titleTextAttributes       = [.foregroundColor: navy]
+        navBarAppearance.largeTitleTextAttributes  = [.foregroundColor: navy]
+        navBarAppearance.shadowColor               = .clear
+        UINavigationBar.appearance().standardAppearance   = navBarAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navBarAppearance
+        UINavigationBar.appearance().compactAppearance    = navBarAppearance
+        UINavigationBar.appearance().tintColor            = navy
+    }
+}
+
+// MARK: - Color tokens
+
+extension Color {
+    /// Accent — MET dark teal #114B5F (matches MileageTracker893)
+    static let navyBlue = Color(red: 17/255, green: 75/255, blue: 95/255)
+
+    /// Background — MET ice blue #EEF8FA (matches MileageTracker893)
+    static let appBackground = Color(red: 238/255, green: 248/255, blue: 250/255)
+}
+
+// MARK: - Button styles
+
 struct NavyBorderedButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -21,7 +64,6 @@ struct NavyBorderedButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Directory Button Style (active = filled, inactive = bordered)
 struct DirectoryButtonStyle: ButtonStyle {
     let isActive: Bool
     func makeBody(configuration: Configuration) -> some View {
@@ -41,42 +83,12 @@ struct DirectoryButtonStyle: ButtonStyle {
     }
 }
 
-extension Color {
-    /// Accent — MET dark teal #114B5F (matches MileageTracker893)
-    static let navyBlue = Color(red: 17/255, green: 75/255, blue: 95/255)
-
-    /// Background — MET ice blue #EEF8FA (matches MileageTracker893)
-    static let appBackground = Color(red: 238/255, green: 248/255, blue: 250/255)
-}
+// MARK: - App entry point
 
 @main
 struct MusicPlayerApp: App {
     init() {
-        let navy = UIColor(Color.navyBlue)
-        let bg   = UIColor(Color.appBackground)
-
-        // List / TableView backgrounds
-        UITableView.appearance().backgroundColor     = bg
-        UITableViewCell.appearance().backgroundColor = bg
-        UITableView.appearance().separatorColor      = UIColor(Color.navyBlue.opacity(0.2))
-
-        // All text navy
-        UILabel.appearance().textColor = navy
-        UINavigationBar.appearance().titleTextAttributes      = [.foregroundColor: navy]
-        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: navy]
-        UITextField.appearance().textColor = navy
-
-        // Nav bar background
-        let navBarAppearance = UINavigationBarAppearance()
-        navBarAppearance.configureWithOpaqueBackground()
-        navBarAppearance.backgroundColor                    = bg
-        navBarAppearance.titleTextAttributes                = [.foregroundColor: navy]
-        navBarAppearance.largeTitleTextAttributes           = [.foregroundColor: navy]
-        navBarAppearance.shadowColor                        = .clear
-        UINavigationBar.appearance().standardAppearance    = navBarAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance  = navBarAppearance
-        UINavigationBar.appearance().compactAppearance     = navBarAppearance
-        UINavigationBar.appearance().tintColor             = navy
+        AppAppearance.configure()
     }
 
     var body: some Scene {
